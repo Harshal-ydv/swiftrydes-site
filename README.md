@@ -1,6 +1,9 @@
 #  Swift Rydes : Serverless Unicorn Ride-Sharing App
 
-A full end-to-end serverless web application built on AWS, Users can sign up, log in, and request a unicorn pickup by clicking on a map.
+Swift Rydes is a full end-to-end serverless web application built on AWS that 
+demonstrates a production-style cloud architecture using 7 core AWS services. 
+Users can register, authenticate, and request a unicorn ride by clicking on an 
+interactive ArcGIS map - the nearest unicorn is then dispatched to their location.
 
 ---
 
