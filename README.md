@@ -1,130 +1,36 @@
-# AWS Project - Build a Full End-to-End Web Application with 7 Services | Step-by-Step Tutorial
+#  Swift Rydes : Serverless Unicorn Ride-Sharing App
 
-This repo contains the code files used in this [YouTube video](https://youtu.be/K6v6t5z6AsU).
+A full end-to-end serverless web application built on AWS, Users can sign up, log in, and request a unicorn pickup by clicking on a map.
 
-## TL;DR
-We're creating a web application for a unicorn ride-sharing service called Wild Rydes (from the original [Amazon workshop](https://aws.amazon.com/serverless-workshops)).  The app uses IAM, Amplify, Cognito, Lambda, API Gateway and DynamoDB, with code stored in GitHub and incorporated into a CI/CD pipeline with Amplify.
+---
 
-The app will let you create an account and log in, then request a ride by clicking on a map (powered by ArcGIS).  The code can also be extended to build out more functionality.
+##  Architecture Diagram
 
-## Cost
-All services used are eligible for the [AWS Free Tier](https://aws.amazon.com/free/).  Outside of the Free Tier, there may be small charges associated with building the app (less than $1 USD), but charges will continue to incur if you leave the app running.  Please see the end of the YouTube video for instructions on how to delete all resources used in the video.
+![Architecture Diagram](assets/architecture-diagram.png)
 
-## The Application Code
-The application code is here in this repository.
+---
 
-## The Lambda Function Code
-Here is the code for the Lambda function, originally taken from the [AWS workshop](https://aws.amazon.com/getting-started/hands-on/build-serverless-web-app-lambda-apigateway-s3-dynamodb-cognito/module-3/ ), and updated for Node 20.x:
+##  AWS Services Used
 
-```node
-import { randomBytes } from 'crypto';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
+| Service | Purpose |
+|---|---|
+| **AWS Amplify** | Hosts the static frontend and provides CI/CD pipeline from GitHub |
+| **GitHub** | Source control - pushes trigger automatic Amplify deploys |
+| **Amazon Cognito** | User registration, login, and JWT token issuance |
+| **Amazon API Gateway** | REST API with Cognito JWT authorizer |
+| **AWS Lambda** | Serverless `requestUnicorn` function (Node.js 22.x) |
+| **Amazon DynamoDB** | `Rides` table - stores ride records |
+| **AWS IAM** | Lambda execution role with `dynamodb:PutItem` inline policy |
 
-const client = new DynamoDBClient({});
-const ddb = DynamoDBDocumentClient.from(client);
+---
 
-const fleet = [
-    { Name: 'Angel', Color: 'White', Gender: 'Female' },
-    { Name: 'Gil', Color: 'White', Gender: 'Male' },
-    { Name: 'Rocinante', Color: 'Yellow', Gender: 'Female' },
-];
+##  How It Works
 
-export const handler = async (event, context) => {
-    if (!event.requestContext.authorizer) {
-        return errorResponse('Authorization not configured', context.awsRequestId);
-    }
+1. **Code push → Auto deploy** - GitHub push triggers Amplify to build and deploy the frontend
+2. **Sign up / Log in** - Cognito handles auth and returns a JWT token to the browser
+3. **Request a ride** - User clicks the map; browser sends `POST /ride` to API Gateway with the JWT in the `Authorization` header
+4. **Token validation** - API Gateway validates the JWT via the Cognito authorizer
+5. **Lambda executes** - `requestUnicorn` picks a random unicorn and writes the ride to DynamoDB using `PutItem`
+6. **Response** - Lambda returns unicorn details → API Gateway → browser shows arrival info
 
-    const rideId = toUrlString(randomBytes(16));
-    console.log('Received event (', rideId, '): ', event);
-
-    const username = event.requestContext.authorizer.claims['cognito:username'];
-    const requestBody = JSON.parse(event.body);
-    const pickupLocation = requestBody.PickupLocation;
-
-    const unicorn = findUnicorn(pickupLocation);
-
-    try {
-        await recordRide(rideId, username, unicorn);
-        return {
-            statusCode: 201,
-            body: JSON.stringify({
-                RideId: rideId,
-                Unicorn: unicorn,
-                Eta: '30 seconds',
-                Rider: username,
-            }),
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-            },
-        };
-    } catch (err) {
-        console.error(err);
-        return errorResponse(err.message, context.awsRequestId);
-    }
-};
-
-function findUnicorn(pickupLocation) {
-    console.log('Finding unicorn for ', pickupLocation.Latitude, ', ', pickupLocation.Longitude);
-    return fleet[Math.floor(Math.random() * fleet.length)];
-}
-
-async function recordRide(rideId, username, unicorn) {
-    const params = {
-        TableName: 'Rides',
-        Item: {
-            RideId: rideId,
-            User: username,
-            Unicorn: unicorn,
-            RequestTime: new Date().toISOString(),
-        },
-    };
-    await ddb.send(new PutCommand(params));
-}
-
-function toUrlString(buffer) {
-    return buffer.toString('base64')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
-}
-
-function errorResponse(errorMessage, awsRequestId) {
-    return {
-        statusCode: 500,
-        body: JSON.stringify({
-            Error: errorMessage,
-            Reference: awsRequestId,
-        }),
-        headers: {
-            'Access-Control-Allow-Origin': '*',
-        },
-    };
-}
-```
-
-## The Lambda Function Test Function
-Here is the code used to test the Lambda function:
-
-```json
-{
-    "path": "/ride",
-    "httpMethod": "POST",
-    "headers": {
-        "Accept": "*/*",
-        "Authorization": "eyJraWQiOiJLTzRVMWZs",
-        "content-type": "application/json; charset=UTF-8"
-    },
-    "queryStringParameters": null,
-    "pathParameters": null,
-    "requestContext": {
-        "authorizer": {
-            "claims": {
-                "cognito:username": "the_username"
-            }
-        }
-    },
-    "body": "{\"PickupLocation\":{\"Latitude\":47.6174755835663,\"Longitude\":-122.28837066650185}}"
-}
-```
-
+---
